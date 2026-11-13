@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Knapsack: Greedy vs DP</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--surface);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 { margin-top: 0; text-align: center; }
+        .instructions {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+        .drive-container {
+            background: #334155;
+            height: 40px;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 2px solid #475569;
+        }
+        .drive-bar {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            min-width: 110px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            white-space: nowrap;
+            color: white;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .files-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .file-card {
+            background: #334155;
+            border: 2px solid #475569;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            user-select: none;
+        }
+        .file-card:hover { transform: translateY(-2px); border-color: var(--primary); }
+        .file-card.selected { border-color: var(--success); background: #134e4a; }
+        .file-card.disabled { opacity: 0.4; cursor: not-allowed; }
+        .file-card.highlight { border-color: var(--warning); box-shadow: 0 0 15px var(--warning); }
+        .file-icon { font-size: 24px; margin-bottom: 8px; }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-reset { background: #64748b; }
+        .btn-greedy { background: var(--warning); color: #000; }
+        .btn-dp { background: var(--success); }
+
+        .log-panel {
+            background: #000;
+            color: #10b981;
+            font-family: monospace;
+            padding: 16px;
+            border-radius: 8px;
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        .log-entry { margin-bottom: 6px; line-height: 1.4; }
+        .log-highlight { color: #f59e0b; }
+        
+        .ratio-badge {
+            font-size: 0.75rem;
+            background: #475569;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-top: 6px;
+            display: inline-block;
+        }
+
+        /* DP Table Styles */
+        .table-container {
+            display: none;
+            background: #334155;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #475569;
+            margin-bottom: 20px;
+        }
+        .table-container h3 {
+            margin-top: 0;
+            font-size: 1rem;
+            text-align: left;
+            color: var(--text-muted);
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.75rem;
+        }
+        th, td {
+            border: 1px solid #475569;
+            padding: 6px 4px;
+            text-align: center;
+            min-width: 22px;
+        }
+        th { background: #1e293b; }
+        th:first-child {
+            position: sticky;
+            left: 0;
+            background: #1e293b;
+            z-index: 1;
+            text-align: right;
+            padding-right: 10px;
+        }
+        td { transition: background-color 0.3s; }
+        
+        /* Table highlight classes for DP traceback */
+        .cell-active { background-color: var(--primary) !important; color: white; font-weight: bold; box-shadow: inset 0 0 0 2px white; }
+        .cell-keep { background-color: var(--success) !important; color: white; font-weight: bold; }
+        .cell-skip { background-color: #64748b !important; color: #cbd5e1; opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>☁️ Cloud Storage Optimization</h1>
+    <p class="instructions">
+        <strong>Goal:</strong> Maximize the total 'Value' of files stored in your 30GB cloud drive.<br>
+        Click the files to manually try, or watch the algorithms battle it out!
+    </p>
+
+    <div class="drive-container">
+        <div class="drive-bar" id="drive-bar">0 / 30 GB</div>
+    </div>
+    
+    <div class="stats">
+        <span id="capacity-text">Used: 0 / 30 GB</span>
+        <span id="value-text">Total Value: 0 ⭐️</span>
+    </div>
+
+    <div class="files-grid" id="files-grid">
+        <!-- Files generated by JS -->
+    </div>
+
+    <div class="controls">
+        <button class="btn-reset" id="btn-reset" onclick="resetGame()">🔄 Reset / Play Manually</button>
+        <button class="btn-greedy" id="btn-greedy" onclick="runGreedy()">⚡ Run Greedy Algorithm</button>
+        <button class="btn-dp" id="btn-dp" onclick="runDP()">🧠 Run Dynamic Programming</button>
+    </div>
+
+    <!-- New DP Table Visualization Container -->
+    <div class="table-container" id="dp-table-container">
+        <h3>DP State Matrix: Resolving Sub-Problems (Rows: Items, Columns: Capacity 0-30GB)</h3>
+        <div class="table-wrapper" id="dp-table-wrapper"></div>
+    </div>
+
+    <div class="log-panel" id="log-panel">
+        <div class="log-entry">System ready. Awaiting manual input or algorithm selection...</div>
+    </div>
+</div>
+
+<script>
+    const MAX_CAPACITY = 30;
+    const filesData = [
+        { id: 'f1', name: 'Backups', icon: '🗄️', size: 18, value: 20 },
+        { id: 'f2', name: 'Movies', icon: '🎬', size: 15, value: 16 },
+        { id: 'f3', name: 'Games', icon: '🎮', size: 15, value: 16 },
+        { id: 'f4', name: 'Photos', icon: '📸', size: 10, value: 9 },
+        { id: 'f5', name: 'Music', icon: '🎵', size: 5, value: 4 },
+        { id: 'f6', name: 'Docs', icon: '📄', size: 3, value: 2 }
+    ];
+
+    let currentFiles = JSON.parse(JSON.stringify(filesData));
+    let selectedIds = new Set();
+    let isAnimating = false;
+
+    const filesGrid = document.getElementById('files-grid');
+    const driveBar = document.getElementById('drive-bar');
+    const capacityText = document.getElementById('capacity-text');
+    const valueText = document.getElementById('value-text');
+    const logPanel = document.getElementById('log-panel');
+    const dpTableContainer = document.getElementById('dp-table-container');
+    const dpTableWrapper = document.getElementById('dp-table-wrapper');
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    function init() {
+        renderFiles();
+        updateDrive();
+    }
+
+    function renderFiles() {
+        filesGrid.innerHTML = '';
+        currentFiles.forEach(f => {
+            const ratio = (f.value / f.size).toFixed(2);
+            const isSelected = selectedIds.has(f.id);
+            const div = document.createElement('div');
+            div.className = `file-card ${isSelected ? 'selected' : ''}`;
+            div.id = `card-${f.id}`;
+            div.onclick = () => toggleFile(f.id);
+            div.innerHTML = `
+                <div class="file-icon">${f.icon}</div>
+                <div style="font-weight:bold">${f.name}</div>
+                <div style="font-size: 0.85rem">${f.size}GB | ${f.value}⭐️</div>
+                <div class="ratio-badge">Ratio: ${ratio}</div>
+            `;
+            filesGrid.appendChild(div);
+        });
+    }
+
+    function toggleFile(id) {
+        if (isAnimating) return;
+        const file = currentFiles.find(f => f.id === id);
+        if (selectedIds.has(id)) {
+            selectedIds.delete(id);
+        } else {
+            if (getCurrentSize() + file.size <= MAX_CAPACITY) {
+                selectedIds.add(id);
+            } else {
+                log(`Cannot add ${file.name}: Not enough space!`, 'danger');
+                return;
+            }
+        }
+        renderFiles();
+        updateDrive();
+    }
+
+    function getCurrentSize() {
+        return Array.from(selectedIds).reduce((sum, id) => sum + currentFiles.find(f => f.id === id).size, 0);
+    }
+
+    function getCurrentValue() {
+        return Array.from(selectedIds).reduce((sum, id) => sum + currentFiles.find(f => f.id === id).value, 0);
+    }
+
+    function updateDrive() {
+        const size = getCurrentSize();
+        const value = getCurrentValue();
+        const percent = (size / MAX_CAPACITY) * 100;
+        
+        driveBar.style.width = `${percent}%`;
+        driveBar.innerText = `${size} / ${MAX_CAPACITY} GB`; 
+        driveBar.style.backgroundColor = percent > 90 ? 'var(--danger)' : 'var(--primary)';
+        
+        capacityText.innerText = `Used: ${size} / ${MAX_CAPACITY} GB`;
+        valueText.innerText = `Total Value: ${value} ⭐️`;
+    }
+
+    function log(message, type = 'normal') {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        if (type === 'highlight') div.innerHTML = `<span class="log-highlight">${message}</span>`;
+        else if (type === 'danger') div.innerHTML = `<span style="color:var(--danger)">${message}</span>`;
+        else div.innerText = message;
+        
+        logPanel.appendChild(div);
+        logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    function toggleControls(disable) {
+        isAnimating = disable;
+        document.getElementById('btn-reset').disabled = disable;
+        document.getElementById('btn-greedy').disabled = disable;
+        document.getElementById('btn-dp').disabled = disable;
+    }
+
+    function resetGame() {
+        selectedIds.clear();
+        dpTableContainer.style.display = 'none';
+        logPanel.innerHTML = '<div class="log-entry">Drive formatted. Awaiting input...</div>';
+        currentFiles = JSON.parse(JSON.stringify(filesData));
+        renderFiles();
+        updateDrive();
+    }
+
+    // Render the DP Table dynamically
+    function renderDPTable(K) {
+        dpTableContainer.style.display = 'block';
+        let html = '<table><thead><tr><th>Items \\ Cap</th>';
+        
+        // Headers (0 to 30 GB)
+        for (let w = 0; w <= MAX_CAPACITY; w++) {
+            html += `<th>${w}</th>`;
+        }
+        html += '</tr></thead><tbody>';
+
+        // Rows
+        for (let i = 0; i <= currentFiles.length; i++) {
+            let rowLabel = i === 0 ? '0 (Empty)' : `${i}: ${currentFiles[i - 1].name} (${currentFiles[i-1].size}G)`;
+            html += `<tr><th>${rowLabel}</th>`;
+            for (let w = 0; w <= MAX_CAPACITY; w++) {
+                html += `<td id="cell-${i}-${w}">${K[i][w]}</td>`;
+            }
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+        dpTableWrapper.innerHTML = html;
+        // Scroll table to the far right automatically so 30GB is visible
+        dpTableWrapper.scrollLeft = dpTableWrapper.scrollWidth;
+    }
+
+    async function runGreedy() {
+        resetGame();
+        toggleControls(true);
+        log('⚡ STARTING GREEDY ALGORITHM ⚡', 'highlight');
+        log('Strategy: Local optimization. Always pick the file with the highest Value-to-GB ratio first.');
+        await sleep(1500);
+
+        currentFiles.sort((a, b) => (b.value / b.size) - (a.value / a.size));
+        renderFiles();
+        log('1. Sorted all files by highest ratio.', 'highlight');
+        await sleep(1000);
+
+        for (const file of currentFiles) {
+            const card = document.getElementById(`card-${file.id}`);
+            card.classList.add('highlight');
+            log(`Checking ${file.name}... (Size: ${file.size}GB)`);
+            await sleep(1000);
+
+            if (getCurrentSize() + file.size <= MAX_CAPACITY) {
+                selectedIds.add(file.id);
+                renderFiles();
+                updateDrive();
+                log(`> Added ${file.name}. Fits perfectly!`, 'highlight');
+            } else {
+                card.classList.add('disabled');
+                log(`> Skipped ${file.name}. Not enough space.`);
+            }
+            card.classList.remove('highlight');
+            await sleep(800);
+        }
+
+        log('⚡ GREEDY FINISHED. Result: 28GB used, 29⭐️ total.', 'highlight');
+        log('Notice: Greedy got trapped! It picked Backups first because of the ratio, missing the perfect 30GB fit of Movies + Games.', 'danger');
+        toggleControls(false);
+    }
+
+    async function runDP() {
+        resetGame();
+        toggleControls(true);
+        currentFiles = JSON.parse(JSON.stringify(filesData));
+        renderFiles();
+
+        log('🧠 STARTING DYNAMIC PROGRAMMING 🧠', 'highlight');
+        log('Strategy: Global optimization. Evaluate combinations by breaking the 30GB problem into smaller subproblems.');
+        await sleep(1500);
+
+        log('1. Building the DP state matrix...');
+        
+        const n = currentFiles.length;
+        const K = Array(n + 1).fill(0).map(() => Array(MAX_CAPACITY + 1).fill(0));
+
+        // Fill DP Matrix
+        for (let i = 0; i <= n; i++) {
+            for (let w = 0; w <= MAX_CAPACITY; w++) {
+                if (i === 0 || w === 0) {
+                    K[i][w] = 0;
+                } else if (currentFiles[i - 1].size <= w) {
+                    K[i][w] = Math.max(
+                        currentFiles[i - 1].value + K[i - 1][w - currentFiles[i - 1].size],
+                        K[i - 1][w]
+                    );
+                } else {
+                    K[i][w] = K[i - 1][w];
+                }
+            }
+        }
+
+        renderDPTable(K);
+        await sleep(1500);
+        
+        log('2. Matrix complete. Maximum possible value calculated as: ' + K[n][MAX_CAPACITY] + '⭐️', 'highlight');
+        await sleep(1500);
+        log('3. Tracing back through the state matrix to find the optimal combination...', 'highlight');
+
+        let res = K[n][MAX_CAPACITY];
+        let w = MAX_CAPACITY;
+        
+        // Highlight starting cell
+        document.getElementById(`cell-${n}-${w}`).classList.add('cell-active');
+        await sleep(1500);
+
+        // Traceback logic with animation
+        for (let i = n; i > 0 && res > 0; i--) {
+            const file = currentFiles[i - 1];
+            const card = document.getElementById(`card-${file.id}`);
+            card.classList.add('highlight');
+            
+            log(`Reviewing ${file.name}... (Cell [${i}][${w}])`);
+            await sleep(1500);
+
+            // Removing the active highlight before branching
+            document.getElementById(`cell-${i}-${w}`).classList.remove('cell-active');
+
+            if (res !== K[i - 1][w]) {
+                // Item included
+                document.getElementById(`cell-${i}-${w}`).classList.add('cell-keep');
+                selectedIds.add(file.id);
+                renderFiles();
+                updateDrive();
+                log(`> VALUE CHANGED vs row above. DP selected ${file.name}! Jumping left by ${file.size}GB.`, 'highlight');
+                
+                res = res - file.value;
+                w = w - file.size;
+            } else {
+                // Item bypassed
+                document.getElementById(`cell-${i}-${w}`).classList.add('cell-skip');
+                card.classList.add('disabled');
+                log(`> VALUE UNCHANGED vs row above. DP bypassed ${file.name}. Moving directly up.`);
+            }
+            
+            card.classList.remove('highlight');
+            // Highlight the new current cell
+            document.getElementById(`cell-${i - 1}-${w}`).classList.add('cell-active');
+            
+            // Adjust scroll position to follow the 'w' pointer horizontally
+            const activeCell = document.getElementById(`cell-${i - 1}-${w}`);
+            const cellOffsetLeft = activeCell.offsetLeft;
+            dpTableWrapper.scrollLeft = cellOffsetLeft - dpTableWrapper.clientWidth / 2;
+
+            await sleep(1000);
+        }
+        
+        document.getElementById(`cell-0-${w}`).classList.add('cell-skip');
+
+        log('🧠 DP FINISHED. Result: 30GB used, 32⭐️ total.', 'highlight');
+        log('Notice: Tracing the matrix confirms DP bypassed the highest ratio item (Backups) to fit Movies + Games.', 'highlight');
+        toggleControls(false);
+    }
+
+    init();
+</script>
+</body>
+</html>
